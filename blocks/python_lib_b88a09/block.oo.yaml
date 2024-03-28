@@ -1,0 +1,13 @@
+type: task_block
+title: python_lib_b88a09
+executor:
+  name: python_executor
+  entry: ./index.py
+inputs_def:
+  - handle: pdf_path
+    serialize:
+      serializer: "json"
+      json_schema:
+        type: string
+        "ui:widget": file
+outputs_def: []

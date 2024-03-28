@@ -1,0 +1,13 @@
+nodes:
+  - task: ../../blocks/python_lib_b88a09/block.oo.yaml
+    node_id: 8a09d181-24dc-4292-8273-94202c4b98da
+    inputs_from:
+      - handle: pdf_path
+        trigger: null
+        cache:
+          initial_value: /oomol-storage/books/jingshenfenxi.pdf
+        from_flow: null
+        from_node: null
+        from_slot: null
+    title: Read PDF
+    description: 读取 PDF 文件，并从每一页中提取信息
