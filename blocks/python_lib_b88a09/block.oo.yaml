@@ -10,6 +10,12 @@ inputs_def:
       json_schema:
         type: string
         "ui:widget": file
+  - handle: title_max_length
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
   - handle: paragraph_head_max_delta
     serialize:
       serializer: json
@@ -22,4 +28,11 @@ inputs_def:
       json_schema:
         type: number
         minimum: 1
+  - handle: quote_max_size
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
+
 outputs_def: []

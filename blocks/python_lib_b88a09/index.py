@@ -7,31 +7,70 @@ from enum import Enum
 def main(inputs: dict, context):
   pdf_path = inputs.get("pdf_path")
   with pdfplumber.open(pdf_path) as pdf:
-    for page in pdf.pages:
-      print("================")
-      grouped_paragraphs = extract_grouped_paragraphs(page, inputs)
-      for paragraph in grouped_paragraphs:
-        print(">>>>", paragraph.is_link_previous)
-        for p in paragraph.text_list:
-          print(p)
+    for pdf_page in pdf.pages:
+      page = extract_page_item(pdf_page, inputs)
+      print(">>>>")
+      for i in page.items:
+        print(i.kind, i.text)
+      print(page.quote)
 
   context.done()
 
 class PageItemKind(Enum):
   Title = 1
-  Quote = 2
-  Body = 3
+  Body = 2
 
 @dataclass
 class PageItem:
   kind: PageItemKind
   text: str
-  is_head: bool
+  is_link_previous: bool
+
+@dataclass
+class Page:
+  items: list[PageItem]
+  quote: list[str]
+
+def extract_page_item(page, inputs: dict) -> Page:
+  quote_max_size = inputs.get("quote_max_size")
+  title_max_length = inputs.get("title_max_length")
+  grouped_paragraphs = extract_grouped_paragraphs(page, inputs)
+
+  # 删除第一组，这是页眉
+  del grouped_paragraphs[0]
+
+  if len(grouped_paragraphs) == 0:
+    return None
+
+  footer_paragraphs = grouped_paragraphs[-1]
+  quote: list[str]
+
+  if footer_paragraphs.size <= quote_max_size:
+    del grouped_paragraphs[-1]
+    quote = footer_paragraphs.text_list
+  else:
+    quote = []
+
+  items: list[PageItem] = []
+  for paragraph in grouped_paragraphs:
+    text_list: list[str] = paragraph.text_list
+    kind: PageItemKind
+    if len(text_list) <= 2 and len(text_list[0]) <= title_max_length:
+      kind = PageItemKind.Title
+    else:
+      kind = PageItemKind.Body
+    items.append(PageItem(
+      kind=PageItemKind.Title,
+      text=text_list,
+      is_link_previous=paragraph.is_link_previous,
+    ))
+  return Page(items=items, quote=quote)
 
 @dataclass
 class Paragraphs:
   text_list: list[str]
   is_link_previous: bool
+  size: float
 
 def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
   paragraph_head_max_delta = inputs.get("paragraph_head_max_delta")
@@ -49,10 +88,9 @@ def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
       continue
 
     for i, line in enumerate(lines):
-      text = line["text"]
       tag = tags[i]
-
       if not tag.is_out:
+        text = line["text"]
         if tag.is_head or len(text_list) == 0:
           text_list.append(text)
         else:
@@ -60,9 +98,15 @@ def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
           pretext = re.sub(r"-$", "", pretext) # 删掉英语单词连接符
           text_list[-1] = pretext + text
 
+    mean_size = 0.0
+    for tag in tags:
+      mean_size += tag.size
+    mean_size /= len(tags)
+
     grouped_paragraphs.append(Paragraphs(
       text_list=text_list,
       is_link_previous=not tags[0].is_head,
+      size=mean_size,
     ))
 
   return grouped_paragraphs
@@ -105,17 +149,26 @@ def group_lines(lines: list, max_height_diff: int) -> list[list]:
 class LineTag:
   is_head: bool
   is_out: bool
+  size: float
 
 def tag_head_for_lines(lines: list, paragraph_head_max_delta: int) -> list[LineTag]:
   tags: list[LineTag] = []
   mean_x0 = 0.0
 
   for line in lines:
-    mean_x0 += line["x0"]
-    tags.append(LineTag(
+    tag = LineTag(
       is_head=False, 
       is_out=False,
-    ))
+      size=0.0
+    )
+    mean_x0 += line["x0"]
+    tags.append(tag)
+    chars = line["chars"]
+
+    for char in chars:
+      tag.size += char["size"]
+    tag.size /= len(chars)
+
   mean_x0 /= len(lines)
 
   if len(lines) <= 2:
