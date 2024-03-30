@@ -5,16 +5,61 @@ from dataclasses import dataclass
 from enum import Enum
 
 def main(inputs: dict, context):
-  pdf_path = inputs.get("pdf_path")
-  with pdfplumber.open(pdf_path) as pdf:
+  latest_kind: PageItemKind = PageItemKind.Body
+  title_text_list: list[str] = []
+  body_text_list: list[str] = []
+
+  with pdfplumber.open(inputs.get("pdf_path")) as pdf:
     for pdf_page in pdf.pages:
       page = extract_page_item(pdf_page, inputs)
-      print(">>>>")
-      for i in page.items:
-        print(i.kind, i.text)
-      print(page.quote)
+      
+      for item in page.items:
+        if latest_kind != item.kind:
+          latest_kind = item.kind
+          if item.kind == PageItemKind.Title:
+            output_wiki(context, title_text_list, body_text_list)
+            title_text_list.clear()
+            body_text_list.clear()
+
+        text_list: list[str]
+
+        if item.kind == PageItemKind.Title:
+          text_list = title_text_list
+        elif item.kind == PageItemKind.Body:
+          text_list = body_text_list
+
+        if item.is_link_previous and len(text_list) > 0:
+          for i, text in enumerate(item.text):
+            if i == 0:
+              text_list[-1] += text
+            else:
+              text_list.append(text)
+        else:
+          for text in item.text:
+            text_list.append(text)
+
+      # TODO: handle quote
+      print("Quote:", page.quote)
+
+  if len(title_text_list) > 0 and len(body_text_list) > 0:
+    output_wiki(context, title_text_list, body_text_list)
 
   context.done()
+
+def output_wiki(context, title_text_list: list[str], body_text_list: list[str]):
+  if len(title_text_list) <= 0:
+    return
+  title: str = title_text_list[0]
+  description: str = ""
+  if len(title_text_list) > 1:
+    description = title_text_list[1]
+  text_list = body_text_list[:]
+  wiki: dict = {
+    "title": title,
+    "description": description,
+    "text_list": text_list,
+  }
+  context.output(wiki, "wiki", False)
 
 class PageItemKind(Enum):
   Title = 1
@@ -23,7 +68,7 @@ class PageItemKind(Enum):
 @dataclass
 class PageItem:
   kind: PageItemKind
-  text: str
+  text: list[str]
   is_link_previous: bool
 
 @dataclass
@@ -60,7 +105,7 @@ def extract_page_item(page, inputs: dict) -> Page:
     else:
       kind = PageItemKind.Body
     items.append(PageItem(
-      kind=PageItemKind.Title,
+      kind=kind,
       text=text_list,
       is_link_previous=paragraph.is_link_previous,
     ))

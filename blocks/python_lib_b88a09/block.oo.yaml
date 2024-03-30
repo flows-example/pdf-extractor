@@ -35,4 +35,5 @@ inputs_def:
         type: number
         minimum: 1
 
-outputs_def: []
+outputs_def:
+  - handle: wiki

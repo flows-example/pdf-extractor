@@ -34,4 +34,4 @@ nodes:
         cache:
           initial_value: 12
     title: Read PDF
-    description: 读取 PDF 文件，将每一页转化成一个 Page 向下游输出。
+    description: 读取 PDF 文件，将每一页转化成一个 Wiki 向下游输出。
