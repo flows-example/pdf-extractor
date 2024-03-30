@@ -6,8 +6,20 @@ executor:
 inputs_def:
   - handle: pdf_path
     serialize:
-      serializer: "json"
+      serializer: json
       json_schema:
         type: string
         "ui:widget": file
+  - handle: paragraph_head_max_delta
+    serialize:
+      serializer: json
+      json_schema:
+        type: integer
+        minimum: 1
+  - handle: max_height_diff
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
 outputs_def: []

@@ -9,5 +9,15 @@ nodes:
         from_flow: null
         from_node: null
         from_slot: null
+      - handle: max_height_diff
+        trigger: null
+        cache:
+          initial_value: 5
+        from_flow: null
+        from_node: null
+        from_slot: null
+      - handle: paragraph_head_max_delta
+        cache:
+          initial_value: 24
     title: Read PDF
     description: 读取 PDF 文件，并从每一页中提取信息
