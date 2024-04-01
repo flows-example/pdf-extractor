@@ -35,3 +35,27 @@ nodes:
           initial_value: 12
     title: Read PDF
     description: 读取 PDF 文件，将每一页转化成一个 Wiki 向下游输出。
+  - task: ../../blocks/python_lib_0d6818/block.oo.yaml
+    node_id: 681821c5-5400-497e-a229-00955d3f5f5e
+    inputs_from:
+      - handle: wiki
+        from_node:
+          - node_id: 8a09d181-24dc-4292-8273-94202c4b98da
+            output_handle: wiki
+    title: Convert to HTML
+    description: 将 JSON 对象转化成 HTML 页面
+  - task: common::file_writer
+    node_id: 6918e7c9-3f02-465e-9c74-8de03dcaca91
+    inputs_from:
+      - handle: output_folder
+        cache:
+          initial_value: /oomol-storage/Lancan
+      - handle: binary
+        from_node:
+          - node_id: 681821c5-5400-497e-a229-00955d3f5f5e
+            output_handle: file_binary
+      - handle: file_name
+        from_node:
+          - node_id: 681821c5-5400-497e-a229-00955d3f5f5e
+            output_handle: file_name
+    title: Save

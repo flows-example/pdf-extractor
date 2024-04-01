@@ -1,0 +1,10 @@
+type: task_block
+title: python_lib_0d6818
+executor:
+  name: python_executor
+  entry: ./index.py
+inputs_def:
+  - handle: wiki
+outputs_def:
+  - handle: file_binary
+  - handle: file_name
