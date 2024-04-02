@@ -3,24 +3,37 @@ import pdfplumber
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable
 
 def main(inputs: dict, context):
+  begin_page_index = inputs["begin_page"] - 1
+  end_page_index = inputs["end_page"] - 1
+
   latest_kind: PageItemKind = PageItemKind.Body
   title_text_list: list[str] = []
   body_text_list: list[str] = []
+  quote_list: list[dict] = []
   names: list[str] = []
 
   with pdfplumber.open(inputs.get("pdf_path")) as pdf:
-    for pdf_page in pdf.pages:
+    for page_index, pdf_page in enumerate(pdf.pages):
+      if page_index < begin_page_index or page_index > end_page_index:
+        continue
+
       page = extract_page_item(pdf_page, inputs)
+      if page is None:
+        continue
+
+      quotes = convert_quotes_to_map(page.quote, inputs["quote_list"])
       
       for item in page.items:
         if latest_kind != item.kind:
           latest_kind = item.kind
           if item.kind == PageItemKind.Title:
-            wiki = output_wiki(context, title_text_list, body_text_list)
+            wiki = output_wiki(context, title_text_list, body_text_list, quote_list)
             title_text_list.clear()
             body_text_list.clear()
+            quote_list.clear()
             if wiki is not None:
               names.append(wiki["title"])
 
@@ -33,25 +46,41 @@ def main(inputs: dict, context):
 
         if item.is_link_previous and len(text_list) > 0:
           for i, text in enumerate(item.text):
+            pretext_len = 0
             if i == 0:
+              pretext_len = len(text_list)
               text_list[-1] += text
             else:
               text_list.append(text)
+            if item.kind == PageItemKind.Body:
+              pick_quotes(text, quotes, lambda offset, quote_text: quote_list.append({
+                "index": len(text_list) - 1,
+                "offset": pretext_len + offset,
+                "text": quote_text,
+              }))
         else:
           for text in item.text:
             text_list.append(text)
-
-      # TODO: handle quote
-      print("Quote:", page.quote)
+            pick_quotes(text, quotes, lambda offset, quote_text: quote_list.append({
+              "index": len(text_list) - 1,
+              "offset": offset,
+              "text": quote_text,
+            }))
 
   if len(title_text_list) > 0 and len(body_text_list) > 0:
-    wiki = output_wiki(context, title_text_list, body_text_list)
+    wiki = output_wiki(context, title_text_list, body_text_list, quote_list)
     if wiki is not None:
       names.append(wiki["title"])
 
   context.output(names, "names", True)
 
-def output_wiki(context, title_text_list: list[str], body_text_list: list[str]):
+def pick_quotes(text: str, quotes: dict[str, str], func: Callable[[int, str], None]):
+  for i, char in enumerate(text):
+    if char in quotes:
+      quote_text = quotes[char]
+      func(i, quote_text)
+
+def output_wiki(context, title_text_list: list[str], body_text_list: list[str], quote_list: list[dict]):
   if len(title_text_list) <= 0:
     return None
 
@@ -64,6 +93,7 @@ def output_wiki(context, title_text_list: list[str], body_text_list: list[str]):
     "title": title,
     "description": description,
     "text_list": text_list,
+    "quote_list": quote_list,
   }
   context.output(wiki, "wiki", False)
   return wiki
@@ -123,6 +153,7 @@ class Paragraphs:
 
 def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
   quote_list = inputs.get("quote_list")
+  quote_max_size = inputs.get("quote_max_size")
   paragraph_head_max_delta = inputs.get("paragraph_head_max_delta")
   max_height_diff = inputs.get("max_height_diff")
   title_max_length = inputs.get("title_max_length")
@@ -131,12 +162,15 @@ def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
   lines = page.extract_text_lines()
   lines = [x for x in lines if not is_empty_text(x["text"])]
 
+  if len(lines) == 0:
+    return grouped_paragraphs
+
   # 删除第一组，这是页眉
   del lines[0]
 
   for lines in group_lines(lines, max_height_diff):
     text_list: list[str] = []
-    tags = tag_head_for_lines(lines, quote_list, paragraph_head_max_delta)
+    tags = tag_head_for_lines(lines, quote_list, quote_max_size, paragraph_head_max_delta)
 
     if len(tags) == 0:
       continue
@@ -216,9 +250,15 @@ class LineTag:
   is_out: bool
   size: float
 
-def tag_head_for_lines(lines: list, quote_list: str, paragraph_head_max_delta: int) -> list[LineTag]:
+def tag_head_for_lines(
+  lines: list, 
+  quote_list: str, 
+  quote_max_size: float,
+  paragraph_head_max_delta: int,
+) -> list[LineTag]:
   tags: list[LineTag] = []
   mean_x0 = 0.0
+  mean_size = 0.0
 
   for line in lines:
     tag = LineTag(
@@ -233,14 +273,21 @@ def tag_head_for_lines(lines: list, quote_list: str, paragraph_head_max_delta: i
     for char in chars:
       tag.size += char["size"]
     tag.size /= len(chars)
+    mean_size += tag.size
 
   mean_x0 /= len(lines)
+  mean_size /= len(lines)
 
   if len(lines) <= 1:
     for tag in tags:
       tag.is_head = False
 
-  if len(lines) == 2:
+  elif mean_size <= quote_max_size:
+    for i, line in enumerate(lines):
+      sign = get_quote_sign(line["text"], quote_list)
+      tags[i].is_head = (sign != "")
+
+  elif len(lines) == 2:
     if abs(lines[0]["x0"] - lines[1]["x0"]) <= tags[0].size:
       # 两者间隔不超过一个字符的宽度，说明客观上，它们之间没有间隔太远
       tags[0].is_head = False
@@ -276,16 +323,25 @@ def tag_head_for_lines(lines: list, quote_list: str, paragraph_head_max_delta: i
 
   return tags
 
-def is_quote_lines(lines: list, quote_list: str) -> bool:
-  quote_list = quote_list.lstrip()
-  for line in lines:
-    text = line["text"].lstrip()
-    if len(text) > 0:
-      text = text[0]
-      for char in quote_list:
-        if text == char:
-          return True
-  return False
+def convert_quotes_to_map(quotes: list[str], quote_list: str) -> dict[str, str]:
+  quotes_dict: dict[str, str] = {}
+
+  for quote in quotes:
+    quote = quote.lstrip()
+    if quote == "":
+      continue
+    sign = get_quote_sign(quote, quote_list)
+    if sign == "":
+      continue
+    quotes_dict[sign] = quote[1:].lstrip()
+ 
+  return quotes_dict
+
+def get_quote_sign(text: str, quote_list: str) -> str:
+  for sign in quote_list:
+    if sign == text[0]:
+      return sign
+  return ""
 
 def is_empty_text(text: str):
   return re.match(r"^\s*$", text)

@@ -4,7 +4,7 @@ nodes:
     inputs_from:
       - handle: pdf_path
         cache:
-          initial_value: /oomol-storage/books/jingshenfenxi.pdf
+          initial_value: /oomol-storage/books/full.pdf
       - handle: max_height_diff
         cache:
           initial_value: 5
@@ -23,6 +23,12 @@ nodes:
       - handle: title_min_size
         cache:
           initial_value: 8.5
+      - handle: begin_page
+        cache:
+          initial_value: 39
+      - handle: end_page
+        cache:
+          initial_value: 456
     title: Read PDF
     description: 读取 PDF 文件，将每一页转化成一个 Wiki 向下游输出。
   - task: ../../blocks/python_lib_0d6818/block.oo.yaml

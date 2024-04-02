@@ -10,6 +10,18 @@ inputs_def:
       json_schema:
         type: string
         "ui:widget": file
+  - handle: begin_page
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
+  - handle: end_page
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
   - handle: quote_list
     serialize:
       serializer: json
