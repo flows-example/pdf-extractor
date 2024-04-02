@@ -8,6 +8,7 @@ def main(inputs: dict, context):
   latest_kind: PageItemKind = PageItemKind.Body
   title_text_list: list[str] = []
   body_text_list: list[str] = []
+  names: list[str] = []
 
   with pdfplumber.open(inputs.get("pdf_path")) as pdf:
     for pdf_page in pdf.pages:
@@ -17,9 +18,11 @@ def main(inputs: dict, context):
         if latest_kind != item.kind:
           latest_kind = item.kind
           if item.kind == PageItemKind.Title:
-            output_wiki(context, title_text_list, body_text_list)
+            wiki = output_wiki(context, title_text_list, body_text_list)
             title_text_list.clear()
             body_text_list.clear()
+            if wiki is not None:
+              names.append(wiki["title"])
 
         text_list: list[str]
 
@@ -42,13 +45,16 @@ def main(inputs: dict, context):
       print("Quote:", page.quote)
 
   if len(title_text_list) > 0 and len(body_text_list) > 0:
-    output_wiki(context, title_text_list, body_text_list)
+    wiki = output_wiki(context, title_text_list, body_text_list)
+    if wiki is not None:
+      names.append(wiki["title"])
 
-  context.done()
+  context.output(names, "names", True)
 
 def output_wiki(context, title_text_list: list[str], body_text_list: list[str]):
   if len(title_text_list) <= 0:
-    return
+    return None
+
   title: str = title_text_list[0]
   description: str = ""
   if len(title_text_list) > 1:
@@ -60,6 +66,7 @@ def output_wiki(context, title_text_list: list[str], body_text_list: list[str]):
     "text_list": text_list,
   }
   context.output(wiki, "wiki", False)
+  return wiki
 
 class PageItemKind(Enum):
   Title = 1
@@ -81,9 +88,6 @@ def extract_page_item(page, inputs: dict) -> Page:
   title_max_length = inputs.get("title_max_length")
   grouped_paragraphs = extract_grouped_paragraphs(page, inputs)
 
-  # 删除第一组，这是页眉
-  del grouped_paragraphs[0]
-
   if len(grouped_paragraphs) == 0:
     return None
 
@@ -100,7 +104,7 @@ def extract_page_item(page, inputs: dict) -> Page:
   for paragraph in grouped_paragraphs:
     text_list: list[str] = paragraph.text_list
     kind: PageItemKind
-    if len(text_list) <= 2 and len(text_list[0]) <= title_max_length:
+    if len(text_list) == 2 and len(text_list[0]) <= title_max_length:
       kind = PageItemKind.Title
     else:
       kind = PageItemKind.Body
@@ -118,30 +122,39 @@ class Paragraphs:
   size: float
 
 def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
+  quote_list = inputs.get("quote_list")
   paragraph_head_max_delta = inputs.get("paragraph_head_max_delta")
   max_height_diff = inputs.get("max_height_diff")
+  title_max_length = inputs.get("title_max_length")
 
   grouped_paragraphs: list[Paragraphs] = []
   lines = page.extract_text_lines()
   lines = [x for x in lines if not is_empty_text(x["text"])]
 
+  # 删除第一组，这是页眉
+  del lines[0]
+
   for lines in group_lines(lines, max_height_diff):
     text_list: list[str] = []
-    tags = tag_head_for_lines(lines, paragraph_head_max_delta)
+    tags = tag_head_for_lines(lines, quote_list, paragraph_head_max_delta)
 
     if len(tags) == 0:
       continue
 
-    for i, line in enumerate(lines):
-      tag = tags[i]
-      if not tag.is_out:
-        text = line["text"]
-        if tag.is_head or len(text_list) == 0:
-          text_list.append(text)
-        else:
-          pretext = text_list[-1]
-          pretext = re.sub(r"-$", "", pretext) # 删掉英语单词连接符
-          text_list[-1] = pretext + text
+    if is_title_tags(tags) and len(lines[0]["text"]) <= title_max_length:
+      for line in lines:
+        text_list.append(line["text"])
+    else:
+      for i, line in enumerate(lines):
+        tag = tags[i]
+        if not tag.is_out:
+          text = line["text"]
+          if tag.is_head or len(text_list) == 0:
+            text_list.append(text)
+          else:
+            pretext = text_list[-1]
+            pretext = re.sub(r"-$", "", pretext) # 删掉英语单词连接符
+            text_list[-1] = pretext + text
 
     mean_size = 0.0
     for tag in tags:
@@ -155,6 +168,13 @@ def extract_grouped_paragraphs(page, inputs: dict) -> list[Paragraphs]:
     ))
 
   return grouped_paragraphs
+
+def is_title_tags(tags: list) -> bool:
+  if len(tags) != 2:
+    return False
+  if tags[0].is_head != False or tags[1].is_head != False:
+    return False
+  return True
 
 def group_lines(lines: list, max_height_diff: int) -> list[list]:
   if len(lines) == 0:
@@ -196,7 +216,7 @@ class LineTag:
   is_out: bool
   size: float
 
-def tag_head_for_lines(lines: list, paragraph_head_max_delta: int) -> list[LineTag]:
+def tag_head_for_lines(lines: list, quote_list: str, paragraph_head_max_delta: int) -> list[LineTag]:
   tags: list[LineTag] = []
   mean_x0 = 0.0
 
@@ -216,10 +236,19 @@ def tag_head_for_lines(lines: list, paragraph_head_max_delta: int) -> list[LineT
 
   mean_x0 /= len(lines)
 
-  if len(lines) <= 2:
-    # 只有两行，无法通过缩进比较，从中文的习惯来看，就是 2 个自然段。
+  if len(lines) <= 1:
     for tag in tags:
-      tag.is_head = True
+      tag.is_head = False
+
+  if len(lines) == 2:
+    if abs(lines[0]["x0"] - lines[1]["x0"]) <= tags[0].size:
+      # 两者间隔不超过一个字符的宽度，说明客观上，它们之间没有间隔太远
+      tags[0].is_head = False
+      tags[1].is_head = False
+    else:
+      tags[0].is_head = True
+      tags[1].is_head = True
+
   else:
     on_left_count = 0
     for i, line in enumerate(lines):
@@ -246,6 +275,17 @@ def tag_head_for_lines(lines: list, paragraph_head_max_delta: int) -> list[LineT
         tag.is_out = True
 
   return tags
+
+def is_quote_lines(lines: list, quote_list: str) -> bool:
+  quote_list = quote_list.lstrip()
+  for line in lines:
+    text = line["text"].lstrip()
+    if len(text) > 0:
+      text = text[0]
+      for char in quote_list:
+        if text == char:
+          return True
+  return False
 
 def is_empty_text(text: str):
   return re.match(r"^\s*$", text)

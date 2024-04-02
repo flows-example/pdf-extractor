@@ -1,0 +1,10 @@
+type: task_block
+title: python_lib_2795b1
+executor:
+  name: python_executor
+  entry: ./index.py
+inputs_def:
+  - handle: names
+outputs_def:
+  - handle: binary
+  - handle: file_name

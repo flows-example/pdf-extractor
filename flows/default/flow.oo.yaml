@@ -3,36 +3,26 @@ nodes:
     node_id: 8a09d181-24dc-4292-8273-94202c4b98da
     inputs_from:
       - handle: pdf_path
-        trigger: null
         cache:
           initial_value: /oomol-storage/books/jingshenfenxi.pdf
-        from_flow: null
-        from_node: null
-        from_slot: null
       - handle: max_height_diff
-        trigger: null
         cache:
           initial_value: 5
-        from_flow: null
-        from_node: null
-        from_slot: null
       - handle: paragraph_head_max_delta
-        trigger: null
         cache:
           initial_value: 24
-        from_flow: null
-        from_node: null
-        from_slot: null
       - handle: quote_max_size
-        trigger: null
         cache:
           initial_value: 7
-        from_flow: null
-        from_node: null
-        from_slot: null
       - handle: title_max_length
         cache:
           initial_value: 12
+      - handle: quote_list
+        cache:
+          initial_value: ①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳
+      - handle: title_min_size
+        cache:
+          initial_value: 8.5
     title: Read PDF
     description: 读取 PDF 文件，将每一页转化成一个 Wiki 向下游输出。
   - task: ../../blocks/python_lib_0d6818/block.oo.yaml
@@ -54,8 +44,26 @@ nodes:
         from_node:
           - node_id: 681821c5-5400-497e-a229-00955d3f5f5e
             output_handle: file_binary
+          - node_id: 95b10f1f-88ef-46bc-ab49-df23d4452c34
+            output_handle: binary
       - handle: file_name
         from_node:
           - node_id: 681821c5-5400-497e-a229-00955d3f5f5e
             output_handle: file_name
+          - node_id: 95b10f1f-88ef-46bc-ab49-df23d4452c34
+            output_handle: file_name
+      - handle: when_file_exists
+        cache:
+          initial_value: override
     title: Save
+  - task: ../../blocks/python_lib_2795b1/block.oo.yaml
+    node_id: 95b10f1f-88ef-46bc-ab49-df23d4452c34
+    inputs_from:
+      [
+        {
+            handle: names,
+            from_node: [ { node_id: 8a09d181-24dc-4292-8273-94202c4b98da, output_handle: names } ]
+          }
+      ]
+    title: Generate index.html
+    description: 生成目录页面

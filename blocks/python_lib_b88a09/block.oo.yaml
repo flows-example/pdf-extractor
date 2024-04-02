@@ -10,7 +10,18 @@ inputs_def:
       json_schema:
         type: string
         "ui:widget": file
+  - handle: quote_list
+    serialize:
+      serializer: json
+      json_schema:
+        type: string
   - handle: title_max_length
+    serialize:
+      serializer: json
+      json_schema:
+        type: number
+        minimum: 1
+  - handle: title_min_size
     serialize:
       serializer: json
       json_schema:
@@ -37,3 +48,4 @@ inputs_def:
 
 outputs_def:
   - handle: wiki
+  - handle: names
