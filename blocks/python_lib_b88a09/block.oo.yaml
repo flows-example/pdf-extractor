@@ -61,3 +61,5 @@ inputs_def:
 outputs_def:
   - handle: wiki
   - handle: names
+  - handle: page_binary
+  - handle: page_name

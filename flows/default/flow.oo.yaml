@@ -73,3 +73,19 @@ nodes:
       ]
     title: Generate index.html
     description: 生成目录页面
+  - task: common::file_writer
+    node_id: 2c709689-c0ce-4269-86f7-3206f7c1e6ce
+    inputs_from:
+      - handle: binary
+        from_node:
+          - node_id: 8a09d181-24dc-4292-8273-94202c4b98da
+            output_handle: page_binary
+      - handle: file_name
+        from_node:
+          - node_id: 8a09d181-24dc-4292-8273-94202c4b98da
+            output_handle: page_name
+      - handle: output_folder
+        cache:
+          initial_value: ""
+    title: Save Page Images
+    description: 将页面文件保存

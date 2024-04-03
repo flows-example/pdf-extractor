@@ -1,9 +1,11 @@
 import re
+import io
 import pdfplumber
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
+from base64 import b64encode
 
 def main(inputs: dict, context):
   begin_page_index = inputs["begin_page"] - 1
@@ -79,6 +81,13 @@ def pick_quotes(text: str, quotes: dict[str, str], func: Callable[[int, str], No
     if char in quotes:
       quote_text = quotes[char]
       func(i, quote_text)
+
+def pick_page_image(page):
+  image = page.to_image(resolution=150)
+  stream = io.BytesIO()
+  image.save(stream, format="PNG")
+  image_bytes = stream.getvalue()
+  return b64encode(image_bytes).decode("utf-8")
 
 def output_wiki(context, title_text_list: list[str], body_text_list: list[str], quote_list: list[dict]):
   if len(title_text_list) <= 0:
