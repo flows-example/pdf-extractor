@@ -35,7 +35,7 @@ def main(inputs: dict, context):
             body_text_list.clear()
             quote_list.clear()
             if wiki is not None:
-              names.append(wiki["title"])
+              names.append(wiki["file_name"])
 
         text_list: list[str]
 
@@ -70,7 +70,7 @@ def main(inputs: dict, context):
   if len(title_text_list) > 0 and len(body_text_list) > 0:
     wiki = output_wiki(context, title_text_list, body_text_list, quote_list)
     if wiki is not None:
-      names.append(wiki["title"])
+      names.append(wiki["file_name"])
 
   context.output(names, "names", True)
 
@@ -91,6 +91,7 @@ def output_wiki(context, title_text_list: list[str], body_text_list: list[str], 
   text_list = body_text_list[:]
   wiki: dict = {
     "title": title,
+    "file_name": escape_filename(title),
     "description": description,
     "text_list": text_list,
     "quote_list": quote_list,
@@ -345,3 +346,11 @@ def get_quote_sign(text: str, quote_list: str) -> str:
 
 def is_empty_text(text: str):
   return re.match(r"^\s*$", text)
+
+def escape_filename(filename):
+  illegal_chars = r'[<>:"/\\|?*\x00-\x1F\x7F-\x9F]'
+  escaped_filename = re.sub(illegal_chars, " ", filename)
+  escaped_filename = re.sub(r"\s+", " ", escaped_filename)
+  escaped_filename = escaped_filename.strip()
+  escaped_filename = escaped_filename.replace(" ", "_")
+  return escaped_filename

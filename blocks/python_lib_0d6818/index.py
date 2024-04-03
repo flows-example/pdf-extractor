@@ -5,12 +5,13 @@ from dataclasses import dataclass
 def main(props: dict, context):
   wiki = props.get("wiki")
   title: str = wiki["title"]
+  file_name: str = wiki["file_name"]
   description: str = wiki["description"]
   text_list: list[str] = wiki["text_list"]
   quote_list: list[dict] = wiki["quote_list"]
   quote_injector = QuoteInjector(sorted(quote_list, key=lambda x: x["index"]))
 
-  context.output(f"{title}.html", "file_name", False)
+  context.output(f"{file_name}.html", "file_name", False)
   text_paragraphs: list[str] = []
 
   for i, text in enumerate(text_list):
